@@ -13,18 +13,16 @@ public static class RMapper
 
     public static TTarget Map<TTarget>(object source)
     {
-        if (source == null)
-            throw new ArgumentNullException(nameof(source));
+        ArgumentNullException.ThrowIfNull(source);
 
         var sourceType = source.GetType();
         var targetType = typeof(TTarget);
 
         var mapper = MappingsRuntimeRegistry.Get(sourceType, targetType);
 
-        if (mapper == null)
-            throw new InvalidOperationException(
+        return mapper != null
+            ? (TTarget)((dynamic)mapper).Map((dynamic)source)
+            : throw new InvalidOperationException(
                 $"No mapper registered for {sourceType.Name} -> {targetType.Name}");
-
-        return ((dynamic)mapper).Map((dynamic)source);
     }
 }

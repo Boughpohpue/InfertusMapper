@@ -15,10 +15,9 @@ public static class SMapper
     {
         var mapper = MappingsRegistry<TSource, TTarget>.Instance;
 
-        if (mapper == null)
-            throw new InvalidOperationException(
+        return mapper != null
+            ? mapper.Map(source)
+            : throw new InvalidOperationException(
                 $"No mapper registered for {typeof(TSource).Name} -> {typeof(TTarget).Name}");
-
-        return mapper.Map(source);
     }
 }

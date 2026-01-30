@@ -12,6 +12,7 @@ internal static class MappingsRuntimeRegistry
     public static object? Get(Type sourceType, Type targetType)
     {
         _mappers.TryGetValue((sourceType, targetType), out var mapper);
+
         return mapper;
     }
 }
