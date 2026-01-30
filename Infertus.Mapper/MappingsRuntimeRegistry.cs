@@ -1,6 +1,6 @@
 ﻿namespace Infertus.Mapper;
 
-internal static class MapperRuntimeRegistry
+internal static class MappingsRuntimeRegistry
 {
     private static readonly Dictionary<(Type Source, Type Target), object> _mappers = [];
 

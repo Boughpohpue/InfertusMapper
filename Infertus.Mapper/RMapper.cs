@@ -1,14 +1,14 @@
 ﻿namespace Infertus.Mapper;
 
-public static class RTMapper
+public static class RMapper
 {
     public static void Register<TSource, TTarget>(Func<TSource, TTarget> map)
     {
-        if (MapperRuntimeRegistry.Get(typeof(TSource), typeof(TTarget)) != null)
+        if (MappingsRuntimeRegistry.Get(typeof(TSource), typeof(TTarget)) != null)
             throw new InvalidOperationException(
                 $"Mapper already registered for {typeof(TSource).Name} -> {typeof(TTarget).Name}");
 
-        MapperRuntimeRegistry.Register(new MapperDelegate<TSource, TTarget>(map));
+        MappingsRuntimeRegistry.Register(new MapperDelegate<TSource, TTarget>(map));
     }
 
     public static TTarget Map<TTarget>(object source)
@@ -19,7 +19,7 @@ public static class RTMapper
         var sourceType = source.GetType();
         var targetType = typeof(TTarget);
 
-        var mapper = MapperRuntimeRegistry.Get(sourceType, targetType);
+        var mapper = MappingsRuntimeRegistry.Get(sourceType, targetType);
 
         if (mapper == null)
             throw new InvalidOperationException(
