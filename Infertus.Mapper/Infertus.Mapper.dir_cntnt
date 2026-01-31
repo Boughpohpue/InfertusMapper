@@ -1,0 +1,210 @@
+# =============================================================================================================================
+# DIRECTORY: Infertus.Mapper
+# =============================================================================================================================
+
+
+# FILE: Infertus.Mapper\IMapper.cs
+public interface IMapper
+{
+    TTarget Map<TTarget>(object source);
+}
+
+# FILE: Infertus.Mapper\MappingProfile.cs
+public abstract class MappingProfile 
+{
+    protected static void RegisterMapping<TSource, TTarget>(Func<TSource, TTarget> map)
+    {
+        MappingsRegistry.Register(new MappingDelegate<TSource, TTarget>(map));
+    }
+    protected static Mapping<TSource, TTarget> CreateMap<TSource, TTarget>()
+    {
+        var map = MappingsRegistry.Add<TSource, TTarget>();
+        map.Members.AddRange(AutoMapper.GetMapping<TSource, TTarget>());
+        return new Mapping<TSource, TTarget>(map);
+    }
+}
+
+# FILE: Infertus.Mapper\Mapping.cs
+public sealed class Mapping<TSource, TTarget>
+{
+    private readonly TypeMap _typeMap;
+    internal Mapping(TypeMap typeMap)
+    {
+        _typeMap = typeMap;
+    }
+    public Mapping<TSource, TTarget> ForMember<TMember>(
+        Expression<Func<TTarget, TMember>> target, Expression<Func<TSource, TMember>> source)
+    {
+        if (target.Body is not MemberExpression member)
+            throw new ArgumentException($"{nameof(target)} must be a member expression!");
+        if (member.Member is PropertyInfo p && !p.CanWrite)
+            throw new InvalidOperationException(
+                $"Can't map {p.Name} as it's not writable!");
+        if (_typeMap.IgnoredMembers.Contains(member.Member))
+            throw new InvalidOperationException(
+                $"Can't map {member.Member.Name} as it's marked as ignored!");
+        _typeMap.Members.RemoveAll(m => m.Target == member.Member);
+        _typeMap.Members.Add(new MemberExpressionMap(member.Member, source));
+        return this;
+    }
+    public Mapping<TSource, TTarget> Ignore<TMember>(Expression<Func<TTarget, TMember>> target)
+    {
+        if (target.Body is not MemberExpression member)
+            throw new ArgumentException($"{nameof(target)} must be a member expression!");
+        if (!_typeMap.IgnoredMembers.Contains(member.Member))
+        {
+            _typeMap.Members.RemoveAll(m => m.Target == member.Member);
+            _typeMap.IgnoredMembers.Add(member.Member);
+        }
+        return this;
+    }
+}
+
+# FILE: Infertus.Mapper\Mapper.cs
+public class Mapper : IMapper
+{
+    public TTarget Map<TTarget>(object source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var mapper = MappingsRegistry.Get(source.GetType(), typeof(TTarget));
+        return mapper != null
+            ? (TTarget)((dynamic)mapper).Map((dynamic)source)
+            : throw new InvalidOperationException(
+                $"Mapping {source.GetType().Name} -> {typeof(TTarget).Name} not found!");
+    }
+}
+
+# FILE: Infertus.Mapper\ServiceCollectionExtensions.cs
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddMapper(this IServiceCollection services)
+    {
+        services.AddSingleton<IMapper, Mapper>();
+        return services;
+    }
+    public static IServiceCollection AddMappingProfile<TProfile>(this IServiceCollection services)
+        where TProfile : MappingProfile, new()
+    {
+        services.AddSingleton<MappingProfile>(new TProfile());
+        return services;
+    }
+}
+
+# FILE: Infertus.Mapper\Internal\TypeExtensions.cs
+internal static class TypeExtensions
+{
+    private const BindingFlags DefaultFlags = BindingFlags.Public | BindingFlags.Instance;
+    public static IEnumerable<PropertyInfo> GetWritableProperties(this Type t, BindingFlags flags = DefaultFlags) =>
+        t.GetProperties(flags).Where(p => p.CanWrite);
+    public static Dictionary<string, PropertyInfo> GetReadablePropertiesDict(this Type t, BindingFlags flags = DefaultFlags) =>
+        t.GetProperties(flags).Where(p => p.CanRead).ToDictionary(p => p.Name);
+}
+
+# FILE: Infertus.Mapper\Internal\IMap.cs
+public interface IMap<in TSource, out TTarget>
+{
+    TTarget Map(TSource source);
+}
+
+# FILE: Infertus.Mapper\Internal\Services\MappingCompiler.cs
+internal static class MappingCompiler
+{
+    public static Func<TSource, TTarget> Compile<TSource, TTarget>(TypeMap map)
+    {
+        var source = Expression.Parameter(typeof(TSource), "src");
+        var bindings = map.Members
+            .Where(m => !map.IgnoredMembers.Contains(m.Target))
+            .Select(m =>
+                Expression.Bind(
+                    m.Target,
+                    Expression.Invoke(m.Source, source)
+                )
+            );
+        var body = Expression.MemberInit(
+            Expression.New(typeof(TTarget)),
+            bindings
+        );
+        return Expression
+            .Lambda<Func<TSource, TTarget>>(body, source)
+            .Compile();
+    }
+}
+
+# FILE: Infertus.Mapper\Internal\Services\MappingsRegistry.cs
+internal static class MappingsRegistry
+{
+    private static readonly Dictionary<(Type Source, Type Target), object> _maps = [];
+    public static object? Get(Type sourceType, Type targetType)
+    {
+        _maps.TryGetValue((sourceType, targetType), out var mapper);
+        return mapper;
+    }
+    public static TypeMap Add<TSource, TTarget>()
+    {
+        var map = new TypeMap(typeof(TSource), typeof(TTarget));
+        CompileAndRegister(map);
+        return map;
+    }
+    public static void Register<TSource, TTarget>(IMap<TSource, TTarget> mapping)
+    {
+        if (Get(typeof(TSource), typeof(TTarget)) != null)
+            throw new InvalidOperationException(
+                $"Mapping {typeof(TSource).Name} -> {typeof(TTarget).Name} already registered!");
+        _maps[(typeof(TSource), typeof(TTarget))] = mapping;
+    }
+    private static void CompileGeneric<TSource, TTarget>(TypeMap map)
+    {
+        Register(
+            new MappingDelegate<TSource, TTarget>(
+                MappingCompiler.Compile<TSource, TTarget>(map)));
+    }
+    private static void CompileAndRegister(TypeMap map)
+    {
+        var method = typeof(MappingsRegistry)
+            .GetMethod(nameof(CompileGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(map.SourceType, map.TargetType);
+        method.Invoke(null, [map]);
+    }
+}
+
+# FILE: Infertus.Mapper\Internal\Services\AutoMapper.cs
+internal static class AutoMapper
+{
+    public static IEnumerable<MemberExpressionMap> GetMapping<TSource, TTarget>()
+    {
+        var sourceMembers = typeof(TSource).GetReadablePropertiesDict();
+        foreach (var targetProp in typeof(TTarget).GetWritableProperties())
+        {
+            if (!sourceMembers.TryGetValue(targetProp.Name, out var sourceProp)
+                || sourceProp.PropertyType != targetProp.PropertyType)
+                continue;
+            var srcParam = Expression.Parameter(typeof(TSource), "src");
+            var body = Expression.Property(srcParam, sourceProp);
+            var lambda = Expression.Lambda(body, srcParam);
+            yield return new MemberExpressionMap(targetProp, lambda);
+        }
+    }
+}
+
+# FILE: Infertus.Mapper\Internal\Models\MappingDelegate.cs
+internal sealed class MappingDelegate<TSource, TTarget>(Func<TSource, TTarget> map) : IMap<TSource, TTarget>
+{
+    private readonly Func<TSource, TTarget> _map = map ?? throw new ArgumentNullException(nameof(map));
+    public TTarget Map(TSource source) => _map(source);
+}
+
+# FILE: Infertus.Mapper\Internal\Models\MemberExpressionMap.cs
+internal sealed class MemberExpressionMap(MemberInfo target, LambdaExpression source)
+{
+    public MemberInfo Target { get; set; } = target;
+    public LambdaExpression Source { get; set; } = source;
+}
+
+# FILE: Infertus.Mapper\Internal\Models\TypeMap.cs
+internal sealed class TypeMap(Type sourceType, Type targetType)
+{
+    public Type SourceType { get; } = sourceType;
+    public Type TargetType { get; } = targetType;
+    public List<MemberExpressionMap> Members { get; } = [];
+    public HashSet<MemberInfo> IgnoredMembers { get; } = [];
+}

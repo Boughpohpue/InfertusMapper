@@ -1,0 +1,22 @@
+[InfertusMapper]
+   [Infertus.Mapper]
+      [Internal]
+         [Services]
+            AutoMapper.cs
+            MappingCompiler.cs
+            MappingsRegistry.cs
+         [Models]
+            MappingDelegate.cs
+            MemberExpressionMap.cs
+            TypeMap.cs
+         IMap.cs
+         TypeExtensions.cs
+      IMapper.cs
+      Mapper.cs
+      Mapping.cs
+      MappingProfile.cs
+      ServiceCollectionExtensions.cs
+   [Infertus.Mapper.DemoConsoleApp]
+      Program.cs
+      TestProfiles.cs
+      TestTypes.cs

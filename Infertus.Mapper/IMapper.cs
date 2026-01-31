@@ -1,6 +1,6 @@
 ﻿namespace Infertus.Mapper;
 
-public interface IMapper<in TSource, out TTarget>
+public interface IMapper
 {
-    TTarget Map(TSource source);
+    TTarget Map<TTarget>(object source);
 }

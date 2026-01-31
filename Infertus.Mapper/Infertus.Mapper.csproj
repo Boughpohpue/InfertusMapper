@@ -7,10 +7,10 @@
 
     <!-- NuGet metadata -->
     <PackageId>Infertus.Mapper</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.0.0</Version>
     <Authors>Lukasz Kulik</Authors>
     <Company>Infertus</Company>
-    <Description>A minimal, high-performance mapping library for C# that lets you convert between types with either fully type-safe static mappers or flexible runtime-registered mappings.</Description>
+    <Description>InfertusMapper is a lightweight, explicit object-to-object mapper for .NET that favors simplicity, predictability and compile-time configuration over runtime magic.</Description>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Boughpohpue/InfertusMapper</RepositoryUrl>
   </PropertyGroup>

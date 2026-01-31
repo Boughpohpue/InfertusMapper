@@ -1,0 +1,364 @@
+# =============================================================================================================================
+# DIRECTORY: InfertusMapper
+# =============================================================================================================================
+
+# FILE: InfertusMapper\Infertus.Mapper\Internal\Models\MappingDelegate.cs
+internal sealed class MappingDelegate<TSource, TTarget>(Func<TSource, TTarget> map) : IMap<TSource, TTarget>
+{
+    private readonly Func<TSource, TTarget> _map = map ?? throw new ArgumentNullException(nameof(map));
+    public TTarget Map(TSource source) => _map(source);
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\Models\MemberExpressionMap.cs
+internal sealed class MemberExpressionMap(MemberInfo target, LambdaExpression source)
+{
+    public MemberInfo Target { get; set; } = target;
+    public LambdaExpression Source { get; set; } = source;
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\Models\TypeMap.cs
+internal sealed class TypeMap(Type sourceType, Type targetType)
+{
+    public Type SourceType { get; } = sourceType;
+    public Type TargetType { get; } = targetType;
+    public List<MemberExpressionMap> Members { get; } = [];
+    public HashSet<MemberInfo> IgnoredMembers { get; } = [];
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\Services\AutoMapper.cs
+internal static class AutoMapper
+{
+    public static IEnumerable<MemberExpressionMap> GetMapping<TSource, TTarget>()
+    {
+        var sourceMembers = typeof(TSource).GetReadablePropertiesDict();
+        foreach (var targetProp in typeof(TTarget).GetWritableProperties())
+        {
+            if (!sourceMembers.TryGetValue(targetProp.Name, out var sourceProp)
+                || sourceProp.PropertyType != targetProp.PropertyType)
+                continue;
+            var srcParam = Expression.Parameter(typeof(TSource), "src");
+            var body = Expression.Property(srcParam, sourceProp);
+            var lambda = Expression.Lambda(body, srcParam);
+            yield return new MemberExpressionMap(targetProp, lambda);
+        }
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\Services\MappingCompiler.cs
+internal static class MappingCompiler
+{
+    public static Func<TSource, TTarget> Compile<TSource, TTarget>(TypeMap map)
+    {
+        var source = Expression.Parameter(typeof(TSource), "src");
+        var bindings = map.Members
+            .Where(m => !map.IgnoredMembers.Contains(m.Target))
+            .Select(m =>
+                Expression.Bind(
+                    m.Target,
+                    Expression.Invoke(m.Source, source)
+                )
+            );
+        var body = Expression.MemberInit(
+            Expression.New(typeof(TTarget)),
+            bindings
+        );
+        return Expression
+            .Lambda<Func<TSource, TTarget>>(body, source)
+            .Compile();
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\Services\MappingsRegistry.cs
+internal static class MappingsRegistry
+{
+    private static readonly List<TypeMap> _maps = [];
+    private static readonly Dictionary<(Type Source, Type Target), object> _mappings = [];
+    public static object? Get(Type sourceType, Type targetType)
+    {
+        _mappings.TryGetValue((sourceType, targetType), out var mapper);
+        return mapper;
+    }
+    public static TypeMap Add<TSource, TTarget>()
+    {
+        var map = new TypeMap(typeof(TSource), typeof(TTarget));
+        _maps.Add(map);
+        return map;
+    }
+    public static void Register<TSource, TTarget>(IMap<TSource, TTarget> mapping)
+    {
+        if (Get(typeof(TSource), typeof(TTarget)) != null)
+            throw new InvalidOperationException(
+                $"Mapping {typeof(TSource).Name} -> {typeof(TTarget).Name} already registered!");
+        _mappings[(typeof(TSource), typeof(TTarget))] = mapping;
+    }
+    public static void CompileMaps()
+    {
+        foreach (var map in _maps)
+            CompileAndRegister(map);
+    }
+    private static void CompileGeneric<TSource, TTarget>(TypeMap map)
+    {
+        Register(
+            new MappingDelegate<TSource, TTarget>(
+                MappingCompiler.Compile<TSource, TTarget>(map)));
+    }
+    private static void CompileAndRegister(TypeMap map)
+    {
+        var method = typeof(MappingsRegistry)
+            .GetMethod(nameof(CompileGeneric), BindingFlags.NonPublic | BindingFlags.Static)!
+            .MakeGenericMethod(map.SourceType, map.TargetType);
+        method.Invoke(null, [map]);
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\IMap.cs
+public interface IMap<in TSource, out TTarget>
+{
+    TTarget Map(TSource source);
+}
+# FILE: InfertusMapper\Infertus.Mapper\Internal\TypeExtensions.cs
+internal static class TypeExtensions
+{
+    private const BindingFlags DefaultFlags = BindingFlags.Public | BindingFlags.Instance;
+    public static IEnumerable<PropertyInfo> GetWritableProperties(this Type t, BindingFlags flags = DefaultFlags) =>
+        t.GetProperties(flags).Where(p => p.CanWrite);
+    public static Dictionary<string, PropertyInfo> GetReadablePropertiesDict(this Type t, BindingFlags flags = DefaultFlags) =>
+        t.GetProperties(flags).Where(p => p.CanRead).ToDictionary(p => p.Name);
+}
+# FILE: InfertusMapper\Infertus.Mapper\IMapper.cs
+public interface IMapper
+{
+    TTarget Map<TTarget>(object source);
+}
+# FILE: InfertusMapper\Infertus.Mapper\Mapper.cs
+public class Mapper : IMapper
+{
+    public TTarget Map<TTarget>(object source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var mapper = MappingsRegistry.Get(source.GetType(), typeof(TTarget));
+        return mapper != null
+            ? (TTarget)((dynamic)mapper).Map((dynamic)source)
+            : throw new InvalidOperationException(
+                $"Mapping {source.GetType().Name} -> {typeof(TTarget).Name} not found!");
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper\Mapping.cs
+public sealed class Mapping<TSource, TTarget>
+{
+    private readonly TypeMap _typeMap;
+    internal Mapping(TypeMap typeMap)
+    {
+        _typeMap = typeMap;
+    }
+    public Mapping<TSource, TTarget> ForMember<TMember>(
+        Expression<Func<TTarget, TMember>> target, Expression<Func<TSource, TMember>> source)
+    {
+        if (target.Body is not MemberExpression member)
+            throw new ArgumentException($"{nameof(target)} must be a member expression!");
+        if (member.Member is PropertyInfo p && !p.CanWrite)
+            throw new InvalidOperationException(
+                $"Can't map {p.Name} as it's not writable!");
+        if (_typeMap.IgnoredMembers.Contains(member.Member))
+            throw new InvalidOperationException(
+                $"Can't map {member.Member.Name} as it's marked as ignored!");
+        _typeMap.Members.RemoveAll(m => m.Target == member.Member);
+        _typeMap.Members.Add(new MemberExpressionMap(member.Member, source));
+        return this;
+    }
+    public Mapping<TSource, TTarget> Ignore<TMember>(Expression<Func<TTarget, TMember>> target)
+    {
+        if (target.Body is not MemberExpression member)
+            throw new ArgumentException($"{nameof(target)} must be a member expression!");
+        if (!_typeMap.IgnoredMembers.Contains(member.Member))
+        {
+            _typeMap.Members.RemoveAll(m => m.Target == member.Member);
+            _typeMap.IgnoredMembers.Add(member.Member);
+        }
+        return this;
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper\MappingProfile.cs
+public abstract class MappingProfile 
+{
+    protected static void RegisterMapping<TSource, TTarget>(Func<TSource, TTarget> map)
+    {
+        MappingsRegistry.Register(new MappingDelegate<TSource, TTarget>(map));
+    }
+    protected static Mapping<TSource, TTarget> CreateMap<TSource, TTarget>()
+    {
+        if (typeof(TTarget).GetConstructor(Type.EmptyTypes) == null)
+            throw new ArgumentException(
+                $"{typeof(TTarget).Name} must have a parameterless constructor");
+        var map = MappingsRegistry.Add<TSource, TTarget>();
+        map.Members.AddRange(AutoMapper.GetMapping<TSource, TTarget>());
+        return new Mapping<TSource, TTarget>(map);
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper\ServiceCollectionExtensions.cs
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddMapper(this IServiceCollection services)
+    {
+        services.AddSingleton<IMapper, Mapper>();
+        MappingsRegistry.CompileMaps();
+        return services;
+    }
+    public static IServiceCollection AddMappingProfile<TProfile>(this IServiceCollection services)
+        where TProfile : MappingProfile, new()
+    {
+        services.AddSingleton<MappingProfile>(new TProfile());
+        return services;
+    }
+    public static IServiceCollection AddMappingProfileTypes(this IServiceCollection services, params Type[] profileTypes)
+    {
+        foreach (var type in profileTypes)
+        {
+            if (!typeof(MappingProfile).IsAssignableFrom(type))
+                throw new ArgumentException($"{type.Name} is not of {nameof(MappingProfile)} type!");
+            var profile = (MappingProfile)Activator.CreateInstance(type)!;
+            services.AddSingleton(typeof(MappingProfile), profile);
+        }
+        return services;
+    }
+    public static IServiceCollection AddMapper<TProfile>(this IServiceCollection services)
+        where TProfile : MappingProfile, new()
+    {
+        services.AddMappingProfile<TProfile>();
+        services.AddMapper();
+        return services;
+    }
+    public static IServiceCollection AddMapper(this IServiceCollection services, params Type[] profileTypes)
+    {
+        services.AddMappingProfileTypes(profileTypes);
+        services.AddMapper();
+        return services;
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper.DemoConsoleApp\Program.cs
+class Program
+{
+    static void Main(string[] args)
+    {
+        IServiceCollection serviceCollection = new ServiceCollection();
+        var configMethod = 1;
+        switch (configMethod)
+        {
+            case 1:
+                serviceCollection
+                    .AddMappingProfile<TestProfile>()
+                    .AddMappingProfile<TestProfile2>()
+                    .AddMapper();
+                break;
+            case 2:
+                serviceCollection
+                    .AddMappingProfileTypes(
+                        typeof(TestProfile),
+                        typeof(TestProfile2))
+                    .AddMapper();
+                break;
+            case 3:
+                serviceCollection.AddMapper(typeof(TestProfile), typeof(TestProfile2));
+                break;
+        }
+        Test(serviceCollection.BuildServiceProvider());
+    }
+    static void Test(ServiceProvider provider)
+    {
+        var mapper = provider.GetService<IMapper>();
+        if (mapper == null)
+        {
+            Console.WriteLine("Failed to configure services!");
+            return;
+        }
+        var objA = new ClassA(1.44, 69.3);
+        Console.WriteLine($"{nameof(objA)} {objA}");
+        var objB = new ClassB(12, 3.69, 6.93);
+        Console.WriteLine($"{nameof(objB)} {objB}");
+        var objC = new ClassC(9.63, 3.69);
+        Console.WriteLine($"{nameof(objC)} {objC}");
+        Console.WriteLine();
+        var objA_mappedToB = mapper.Map<ClassB>(objA);
+        Console.WriteLine($"{nameof(objA_mappedToB)} {objA_mappedToB}");
+        var objA_mappedToC = mapper.Map<ClassC>(objA);
+        Console.WriteLine($"{nameof(objA_mappedToC)} {objA_mappedToC}");
+        Console.WriteLine();
+        var objB_mappedToA = mapper.Map<ClassA>(objB);
+        Console.WriteLine($"{nameof(objB_mappedToA)} {objB_mappedToA}");
+        var objB_mappedToC = mapper.Map<ClassC>(objB);
+        Console.WriteLine($"{nameof(objB_mappedToC)} {objB_mappedToC}");
+        Console.WriteLine();
+        var objC_mappedToA = mapper.Map<ClassA>(objC);
+        Console.WriteLine($"{nameof(objC_mappedToA)} {objC_mappedToA}");
+        var objC_mappedToB = mapper.Map<ClassB>(objC);
+        Console.WriteLine($"{nameof(objC_mappedToB)} {objC_mappedToB}");
+        Console.WriteLine();
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper.DemoConsoleApp\TestProfiles.cs
+public class TestProfile : MappingProfile
+{
+    public TestProfile()
+    {
+        CreateMap<ClassA, ClassB>()
+            .ForMember(d => d.Latitude, s => s.Lat)
+            .ForMember(d => d.Longitude, s => s.Lon)
+            .Ignore(d => d.Id);
+        RegisterMapping<ClassB, ClassA>(b =>
+            new ClassA(b.Latitude, b.Longitude));
+    }
+}
+public class TestProfile2 : MappingProfile
+{
+    public TestProfile2()
+    {
+        CreateMap<ClassA, ClassC>()
+            .ForMember(d => d.Latitude, s => s.Lat)
+            .ForMember(d => d.Longitude, s => s.Lon);
+        CreateMap<ClassB, ClassC>();
+        RegisterMapping<ClassC, ClassA>(c =>
+            new ClassA(c.Latitude, c.Longitude));
+        CreateMap<ClassC, ClassB>()
+            .Ignore(d => d.Id);
+    }
+}
+# FILE: InfertusMapper\Infertus.Mapper.DemoConsoleApp\TestTypes.cs
+public class ClassA(double lat, double lon)
+{
+    public double Lat { get; set; } = lat;
+    public double Lon { get; set; } = lon;
+    public override string ToString()
+    {
+        return $"[{nameof(ClassA)}]\n{nameof(Lat)}: {Lat}\n{nameof(Lon)}: {Lon}\n";
+    }
+}
+public class ClassB
+{
+    public int Id { get; set; }
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public ClassB()
+    {
+    }
+    public ClassB(int id, double latitude, double longitude)
+    {
+        Id = id;
+        Latitude = latitude;
+        Longitude = longitude;
+    }
+    public override string ToString()
+    {
+        return $"[{nameof(ClassB)}]\n{nameof(Id)}: {Id}\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+    }
+}
+public class ClassC
+{
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public ClassC()
+    {
+    }
+    public ClassC(double latitude, double longitude)
+    {
+        Latitude = latitude;
+        Longitude = longitude;
+    }
+    public override string ToString()
+    {
+        return $"[{nameof(ClassC)}]\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+    }
+}

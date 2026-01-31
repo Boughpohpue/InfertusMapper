@@ -1,6 +1,6 @@
-﻿namespace Infertus.Mapper;
+﻿namespace Infertus.Mapper.Internal.Models;
 
-internal sealed class MapperDelegate<TSource, TTarget>(Func<TSource, TTarget> map) : IMapper<TSource, TTarget>
+internal sealed class MappingDelegate<TSource, TTarget>(Func<TSource, TTarget> map) : IMap<TSource, TTarget>
 {
     private readonly Func<TSource, TTarget> _map = map ?? throw new ArgumentNullException(nameof(map));
 
