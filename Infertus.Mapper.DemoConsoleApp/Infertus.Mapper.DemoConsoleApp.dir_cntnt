@@ -1,0 +1,183 @@
+# ===========================================================================================================================
+# DIRECTORY: Infertus.Mapper.DemoConsoleApp
+# ===========================================================================================================================
+
+# FILE: Infertus.Mapper.DemoConsoleApp\Program.cs
+class Program
+{
+    static void Main(string[] args)
+    {
+        IServiceCollection serviceCollection = new ServiceCollection();
+        var configMethod = 1;
+        switch (configMethod)
+        {
+            case 1:
+                serviceCollection
+                    .AddMappingProfile<TestProfile>()
+                    .AddMappingProfile<TestProfile2>()
+                    .AddMapper();
+                break;
+            case 2:
+                serviceCollection
+                    .AddMappingProfileTypes(
+                        typeof(TestProfile),
+                        typeof(TestProfile2))
+                    .AddMapper();
+                break;
+            case 3:
+                serviceCollection.AddMapper(typeof(TestProfile), typeof(TestProfile2));
+                break;
+        }
+        Test(serviceCollection.BuildServiceProvider());
+    }
+    static void Test(ServiceProvider provider)
+    {
+        var mapper = provider.GetService<IMapper>();
+        if (mapper == null)
+        {
+            Console.WriteLine("Failed to configure services!");
+            return;
+        }
+        var objA = new ClassA(1.44, 69.3);
+        Console.WriteLine($"{nameof(objA)} {objA}");
+        var objB = new ClassB(12, 3.69, 6.93);
+        Console.WriteLine($"{nameof(objB)} {objB}");
+        var objC = new ClassC(9.63, 3.69);
+        Console.WriteLine($"{nameof(objC)} {objC}");
+        Console.WriteLine();
+        var objA_mappedToB = mapper.Map<ClassB>(objA);
+        Console.WriteLine($"{nameof(objA_mappedToB)} {objA_mappedToB}");
+        var objA_mappedToC = mapper.Map<ClassC>(objA);
+        Console.WriteLine($"{nameof(objA_mappedToC)} {objA_mappedToC}");
+        Console.WriteLine();
+        var objB_mappedToA = mapper.Map<ClassA>(objB);
+        Console.WriteLine($"{nameof(objB_mappedToA)} {objB_mappedToA}");
+        var objB_mappedToC = mapper.Map<ClassC>(objB);
+        Console.WriteLine($"{nameof(objB_mappedToC)} {objB_mappedToC}");
+        Console.WriteLine();
+        var objC_mappedToA = mapper.Map<ClassA>(objC);
+        Console.WriteLine($"{nameof(objC_mappedToA)} {objC_mappedToA}");
+        var objC_mappedToB = mapper.Map<ClassB>(objC);
+        Console.WriteLine($"{nameof(objC_mappedToB)} {objC_mappedToB}");
+        Console.WriteLine();
+    }
+}
+# FILE: Infertus.Mapper.DemoConsoleApp\TestProfiles.cs
+public class TestProfile : MappingProfile
+{
+    public TestProfile()
+    {
+        CreateMap<ClassA, ClassB>()
+            .ForMember(d => d.Latitude, s => s.Lat)
+            .ForMember(d => d.Longitude, s => s.Lon)
+            .Ignore(d => d.Id);
+        RegisterMapping<ClassB, ClassA>(b =>
+            new ClassA(b.Latitude, b.Longitude));
+    }
+}
+public class TestProfile2 : MappingProfile
+{
+    public TestProfile2()
+    {
+        CreateMap<ClassA, ClassC>()
+            .ForMember(d => d.Latitude, s => s.Lat)
+            .ForMember(d => d.Longitude, s => s.Lon);
+        CreateMap<ClassB, ClassC>();
+        RegisterMapping<ClassC, ClassA>(c =>
+            new ClassA(c.Latitude, c.Longitude));
+        CreateMap<ClassC, ClassB>()
+            .Ignore(d => d.Id);
+    }
+}
+public class TestProfile3 : MappingProfile
+{
+    public TestProfile3()
+    {
+        CreateMap<ComplexType, ComplexTypeDTO>()
+            .ForMember(d => d.TheName, s => s.Name)
+            .ForMember(d => d.Coordinates, s => s.Coordinates);
+        CreateMap<ComplexTypeDTO, ComplexType>()
+            .ForMember(d => d.Name, s => s.TheName)
+            .ForMember(d => d.Coordinates, s => s.Coordinates);
+    }
+}
+# FILE: Infertus.Mapper.DemoConsoleApp\TestTypes.cs
+public class ClassA(double lat, double lon)
+{
+    public double Lat { get; set; } = lat;
+    public double Lon { get; set; } = lon;
+    public override string ToString()
+    {
+        return $"[{nameof(ClassA)}]\n{nameof(Lat)}: {Lat}\n{nameof(Lon)}: {Lon}\n";
+    }
+}
+public class ClassB
+{
+    public int Id { get; set; }
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public ClassB()
+    {
+    }
+    public ClassB(int id, double latitude, double longitude)
+    {
+        Id = id;
+        Latitude = latitude;
+        Longitude = longitude;
+    }
+    public override string ToString()
+    {
+        return $"[{nameof(ClassB)}]\n{nameof(Id)}: {Id}\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+    }
+}
+public class ClassC
+{
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public ClassC()
+    {
+    }
+    public ClassC(double latitude, double longitude)
+    {
+        Latitude = latitude;
+        Longitude = longitude;
+    }
+    public override string ToString()
+    {
+        return $"[{nameof(ClassC)}]\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+    }
+}
+public class ComplexType
+{
+    public string Name { get; set; } = default!;
+    public ClassB Coordinates { get; set; } = default!;
+    public ComplexType()
+    {
+    }
+    public ComplexType(string name, ClassB coordinates)
+    {
+        Name = name;
+        Coordinates = coordinates;
+    }
+    public override string ToString()
+    {
+        return $"[{nameof(ComplexType)}]\n{nameof(Name)}: {Name}\n{Coordinates}";
+    }
+}
+public class ComplexTypeDTO
+{
+    public string TheName { get; set; } = default!;
+    public ClassC Coordinates { get; set; } = default!;
+    public ComplexTypeDTO()
+    {
+    }
+    public ComplexTypeDTO(string name, ClassC coordinates)
+    {
+        TheName = name;
+        Coordinates = coordinates;
+    }
+    public override string ToString()
+    {
+        return $"[{nameof(ComplexTypeDTO)}]\n{nameof(TheName)}: {TheName}\n{Coordinates}";
+    }
+}

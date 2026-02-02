@@ -1,4 +1,6 @@
-﻿namespace Infertus.Mapper.Internal.Models;
+﻿using Infertus.Mapper.Internal.Interfaces;
+
+namespace Infertus.Mapper.Internal.Models;
 
 internal sealed class MappingDelegate<TSource, TTarget>(Func<TSource, TTarget> map) : IMap<TSource, TTarget>
 {

@@ -31,3 +31,15 @@ public class TestProfile2 : MappingProfile
             .Ignore(d => d.Id);
     }
 }
+
+public class TestProfile3 : MappingProfile
+{
+    public TestProfile3()
+    {
+        CreateMap<NestedB, NestedC>()
+            .ForMember(d => d.NestedObjC, cfg => cfg.MapFrom(s => s.NestedObjB));
+
+        CreateMap<NestedC, NestedB>()
+            .ForMember(d => d.NestedObjB, cfg => cfg.MapFrom(s => s.NestedObjC));
+    }
+}

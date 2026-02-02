@@ -10,7 +10,7 @@ public abstract class MappingProfile
         MappingsRegistry.Register(new MappingDelegate<TSource, TTarget>(map));
     }
 
-    protected static Mapping<TSource, TTarget> CreateMap<TSource, TTarget>()
+    protected static MappingExpression<TSource, TTarget> CreateMap<TSource, TTarget>()
     {
         if (typeof(TTarget).GetConstructor(Type.EmptyTypes) == null)
             throw new ArgumentException(
@@ -20,6 +20,6 @@ public abstract class MappingProfile
 
         map.Members.AddRange(AutoMapper.GetMapping<TSource, TTarget>());
 
-        return new Mapping<TSource, TTarget>(map);
+        return new MappingExpression<TSource, TTarget>(map);
     }
 }

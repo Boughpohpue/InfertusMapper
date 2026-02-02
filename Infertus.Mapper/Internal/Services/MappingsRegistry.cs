@@ -1,4 +1,5 @@
-﻿using Infertus.Mapper.Internal.Models;
+﻿using Infertus.Mapper.Internal.Interfaces;
+using Infertus.Mapper.Internal.Models;
 using System.Reflection;
 
 namespace Infertus.Mapper.Internal.Services;
@@ -33,15 +34,21 @@ internal static class MappingsRegistry
         _mappings[(typeof(TSource), typeof(TTarget))] = mapping;
     }
 
-    public static void CompileMaps()
+    internal static void Compile()
     {
         foreach (var map in _maps)
             CompileAndRegister(map);
     }
 
+    private static void RegisterNotExistingMappings<TSource, TTarget>(IMap<TSource, TTarget> mapping)
+    {
+        if (Get(typeof(TSource), typeof(TTarget)) == null)
+            _mappings[(typeof(TSource), typeof(TTarget))] = mapping;
+    }
+
     private static void CompileGeneric<TSource, TTarget>(TypeMap map)
     {
-        Register(
+        RegisterNotExistingMappings(
             new MappingDelegate<TSource, TTarget>(
                 MappingCompiler.Compile<TSource, TTarget>(map)));
     }

@@ -7,7 +7,7 @@ public class ClassA(double lat, double lon)
 
     public override string ToString()
     {
-        return $"[{nameof(ClassA)}]\n{nameof(Lat)}: {Lat}\n{nameof(Lon)}: {Lon}\n";
+        return $"[{nameof(ClassA)}]:\n{nameof(Lat)}: {Lat}\n{nameof(Lon)}: {Lon}\n";
     }
 }
 
@@ -30,7 +30,7 @@ public class ClassB
 
     public override string ToString()
     {
-        return $"[{nameof(ClassB)}]\n{nameof(Id)}: {Id}\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+        return $"[{nameof(ClassB)}]:\n{nameof(Id)}: {Id}\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
     }
 }
 
@@ -51,6 +51,48 @@ public class ClassC
 
     public override string ToString()
     {
-        return $"[{nameof(ClassC)}]\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+        return $"[{nameof(ClassC)}]:\n{nameof(Latitude)}: {Latitude}\n{nameof(Longitude)}: {Longitude}\n";
+    }
+}
+
+public class NestedB
+{
+    public string Name { get; set; } = default!;
+    public ClassB NestedObjB { get; set; } = default!;
+
+    public NestedB()
+    {
+    }
+
+    public NestedB(string name, ClassB nestedObj)
+    {
+        Name = name;
+        NestedObjB = nestedObj;
+    }
+
+    public override string ToString()
+    {
+        return $"[{nameof(DemoConsoleApp.NestedB)}]:\n{nameof(Name)}: {Name}\n{nameof(NestedObjB)} {NestedObjB}";
+    }
+}
+
+public class NestedC
+{
+    public string Name { get; set; } = default!;
+    public ClassC NestedObjC { get; set; } = default!;
+
+    public NestedC()
+    {
+    }
+
+    public NestedC(string name, ClassC nestedObj)
+    {
+        Name = name;
+        NestedObjC = nestedObj;
+    }
+
+    public override string ToString()
+    {
+        return $"[{nameof(NestedC)}]:\n{nameof(Name)}: {Name}\n{nameof(NestedObjC)} {NestedObjC}";
     }
 }

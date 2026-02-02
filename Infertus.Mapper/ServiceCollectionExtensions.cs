@@ -9,29 +9,14 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IMapper, Mapper>();
 
-        MappingsRegistry.CompileMaps();
-
         return services;
     }
 
-    public static IServiceCollection AddMappingProfile<TProfile>(this IServiceCollection services)
-        where TProfile : MappingProfile, new()
+    public static IServiceCollection AddMapper(this IServiceCollection services, Action<MapperConfigExpression> config)
     {
-        services.AddSingleton<MappingProfile>(new TProfile());
+        config.Invoke(new MapperConfigExpression());
 
-        return services;
-    }
-
-    public static IServiceCollection AddMappingProfileTypes(this IServiceCollection services, params Type[] profileTypes)
-    {
-        foreach (var type in profileTypes)
-        {
-            if (!typeof(MappingProfile).IsAssignableFrom(type))
-                throw new ArgumentException($"{type.Name} is not of {nameof(MappingProfile)} type!");
-
-            var profile = (MappingProfile)Activator.CreateInstance(type)!;
-            services.AddSingleton(typeof(MappingProfile), profile);
-        }
+        services.AddMapper();
 
         return services;
     }
@@ -49,6 +34,31 @@ public static class ServiceCollectionExtensions
     {
         services.AddMappingProfileTypes(profileTypes);
         services.AddMapper();
+
+        return services;
+    }
+
+    public static IServiceCollection AddMappingProfile<TProfile>(this IServiceCollection services)
+        where TProfile : MappingProfile, new()
+    {
+        services.AddSingleton<MappingProfile>(new TProfile());
+
+        MappingsRegistry.Compile();
+
+        return services;
+    }
+
+    public static IServiceCollection AddMappingProfileTypes(this IServiceCollection services, params Type[] profileTypes)
+    {
+        foreach (var type in profileTypes)
+        {
+            if (!typeof(MappingProfile).IsAssignableFrom(type))
+                throw new ArgumentException($"{type.Name} is not of {nameof(MappingProfile)} type!");
+
+            var profile = (MappingProfile)Activator.CreateInstance(type)!;
+            services.AddSingleton(typeof(MappingProfile), profile);
+            MappingsRegistry.Compile();
+        }
 
         return services;
     }
