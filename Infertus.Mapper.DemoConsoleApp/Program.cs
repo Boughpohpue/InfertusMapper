@@ -9,11 +9,11 @@ class Program
         IServiceCollection serviceCollection = new ServiceCollection();
 
         // Different methods of configuring mapper:
-        var configMethod = 4;
+        var configMethod = 3;
         switch (configMethod)
         {
             case 1:
-                // configure mapping profiles one by one and add mapper:
+                // add mapper and configure mapping profiles one by one:
                 serviceCollection
                     .AddMapper()
                     .AddMappingProfile<TestProfile>()
@@ -22,7 +22,7 @@ class Program
                 break;
 
             case 2:
-                // configure multiple mapping profile types at once and add mapper:
+                // add mapper and configure multiple mapping profiles types at once:
                 serviceCollection
                     .AddMapper()
                     .AddMappingProfiles(
@@ -32,7 +32,7 @@ class Program
                 break;
 
             case 3:
-                // configure mapper with multiple mapping profiles using config expression:
+                // add mapper and configure multiple mapping profiles using mapper config expression:
                 serviceCollection.AddMapper(cfg =>
                 {
                     cfg.AddProfile<TestProfile>();
@@ -42,7 +42,7 @@ class Program
                 break;
 
             case 4:
-                // configure mapper with multiple mapping profile types in one line:
+                // configure mapper with multiple mapping profiles types in one line:
                 serviceCollection.AddMapper(typeof(TestProfile), typeof(TestProfile2), typeof(TestProfile3));
                 break;
         }
@@ -123,34 +123,5 @@ class Program
         var collectionC_mappedToCollectionB = mapper.Map<List<ClassB>>(collectionC);
         Console.WriteLine(collectionC_mappedToCollectionB.GetString(nameof(collectionC_mappedToCollectionB)));
         Console.WriteLine();
-    }
-}
-
-public static class CollectionExtensions
-{
-    public static string GetString<T>(this IEnumerable<T> collection, string name = "")
-    {
-        var s = string.IsNullOrEmpty(name)
-            ? $"<{collection.GetCollectionTypeString()}>:\n"
-            : $"{name} <{collection.GetCollectionTypeString()}>:\n";
-
-        s += "[\n";
-        collection.ToList().ForEach(item => s += $"\t{item.GetCollectionItemString()}\n");
-        s += "]";
-
-        return s;
-    }
-
-    public static string GetCollectionTypeString<T>(this IEnumerable<T> collection)
-    {
-        var collectionTypeName = new string(collection.GetType().Name.ToArray()
-            .Where(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')).ToArray());
-
-        return $"{collectionTypeName}<{typeof(T).Name}>";
-    }
-
-    public static string GetCollectionItemString<T>(this T item)
-    {
-        return "{ " + string.Join(", ", $"{item}".Split('\n').Where(i => !string.IsNullOrWhiteSpace(i))).Replace(":,", ":") + " },";
     }
 }
