@@ -13,8 +13,7 @@ public abstract class MappingProfile
     protected static MappingExpression<TSource, TTarget> CreateMap<TSource, TTarget>()
     {
         if (typeof(TTarget).GetConstructor(Type.EmptyTypes) == null)
-            throw new ArgumentException(
-                $"{typeof(TTarget).Name} must have a parameterless constructor");
+            throw new ArgumentException($"{typeof(TTarget).Name} must have a parameterless constructor");
 
         var map = MappingsRegistry.Add<TSource, TTarget>();
 

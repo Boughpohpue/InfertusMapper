@@ -25,7 +25,7 @@ class Program
                 // configure multiple mapping profile types at once and add mapper:
                 serviceCollection
                     .AddMapper()
-                    .AddMappingProfileTypes(
+                    .AddMappingProfiles(
                         typeof(TestProfile),
                         typeof(TestProfile2),
                         typeof(TestProfile3));
@@ -35,9 +35,9 @@ class Program
                 // configure mapper with multiple mapping profiles using config expression:
                 serviceCollection.AddMapper(cfg =>
                 {
-                    cfg.AddProfile(typeof(TestProfile));
-                    cfg.AddProfile<TestProfile2>();
-                    cfg.AddProfile(typeof(TestProfile3));
+                    cfg.AddProfile<TestProfile>();
+                    cfg.AddProfile(typeof(TestProfile2));
+                    cfg.AddProfile<TestProfile3>();
                 });
                 break;
 
@@ -89,13 +89,68 @@ class Program
         Console.WriteLine($"{nameof(nestedB)} {nestedB}");
         var nestedC = new NestedC($"Nested object of type {nameof(ClassC)}", new ClassC(6.66, 9.99));
         Console.WriteLine($"{nameof(nestedC)} {nestedC}");
+        Console.WriteLine();
 
         var nestedB_mappedToNestedC = mapper.Map<NestedC>(nestedB);
         Console.WriteLine($"{nameof(nestedB_mappedToNestedC)} {nestedB_mappedToNestedC}");
-        Console.WriteLine();
-
         var nestedC_mappedToNestedB = mapper.Map<NestedB>(nestedC);
         Console.WriteLine($"{nameof(nestedC_mappedToNestedB)} {nestedC_mappedToNestedB}");
         Console.WriteLine();
+
+        var collectionB = new List<ClassB> 
+        {
+            new(1, 1.11, 3.33),
+            new(2, 2.22, 6.66),
+            new(3, 3.33, 9.99),
+        };
+        Console.WriteLine(collectionB.GetString(nameof(collectionB)));
+        Console.WriteLine();
+
+        var collectionC = new List<ClassC>
+        {
+            new(1.23, 4.56),
+            new(2.34, 5.67),
+            new(3.45, 6.78),
+            new(4.56, 7.89),
+        };
+        Console.WriteLine(collectionC.GetString(nameof(collectionC)));
+        Console.WriteLine();
+
+        var collectionB_mappedToCollectionC = mapper.Map<List<ClassC>>(collectionB);
+        Console.WriteLine(collectionB_mappedToCollectionC.GetString(nameof(collectionB_mappedToCollectionC)));
+        Console.WriteLine();
+
+        var collectionC_mappedToCollectionB = mapper.Map<List<ClassB>>(collectionC);
+        Console.WriteLine(collectionC_mappedToCollectionB.GetString(nameof(collectionC_mappedToCollectionB)));
+        Console.WriteLine();
+    }
+}
+
+public static class CollectionExtensions
+{
+    public static string GetString<T>(this IEnumerable<T> collection, string name = "")
+    {
+        var s = string.IsNullOrEmpty(name)
+            ? $"<{collection.GetCollectionTypeString()}>:\n"
+            : $"{name} <{collection.GetCollectionTypeString()}>:\n";
+
+        s += "[\n";
+        collection.ToList().ForEach(item => s += $"\t{item.GetCollectionItemString()}\n");
+        s += "]";
+
+        return s;
+    }
+
+    public static string GetCollectionTypeString<T>(this IEnumerable<T> collection)
+    {
+        var collectionTypeName = new string(collection.GetType().Name.ToArray()
+            .Where(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')).ToArray());
+
+        return $"{collectionTypeName}<{typeof(T).Name}>";
+    }
+
+    public static string GetCollectionItemString<T>(this T item)
+    {
+        return "{ " + string.Join(", ", $"{item}".Split('\n').Where(i => !string.IsNullOrWhiteSpace(i))).Replace(":,", ":") + " },";
     }
 }

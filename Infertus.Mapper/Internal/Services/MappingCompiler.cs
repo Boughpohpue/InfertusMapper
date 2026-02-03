@@ -12,19 +12,22 @@ internal static class MappingCompiler
         var bindings = map.Members
             .Where(m => !map.IgnoredMembers.Contains(m.Target))
             .Select(m =>
-                Expression.Bind(
-                    m.Target,
-                    Expression.Invoke(m.Source, source)
-                )
-            );
+            {
+                var lambda = m.Source;
+                var param = lambda.Parameters[0];
+                var body = new ParameterReplaceVisitor(param, source)
+                    .Visit(lambda.Body)!;
 
-        var body = Expression.MemberInit(
+                return Expression.Bind(m.Target, body);
+            });
+
+        var bodyExpr = Expression.MemberInit(
             Expression.New(typeof(TTarget)),
             bindings
         );
 
         return Expression
-            .Lambda<Func<TSource, TTarget>>(body, source)
+            .Lambda<Func<TSource, TTarget>>(bodyExpr, source)
             .Compile();
     }
 }

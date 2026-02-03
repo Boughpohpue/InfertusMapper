@@ -28,16 +28,20 @@ internal static class MappingsRegistry
     public static void Register<TSource, TTarget>(IMap<TSource, TTarget> mapping)
     {
         if (Get(typeof(TSource), typeof(TTarget)) != null)
-            throw new InvalidOperationException(
-                $"Mapping {typeof(TSource).Name} -> {typeof(TTarget).Name} already registered!");
+            throw new InvalidOperationException($"Mapping {typeof(TSource).Name} -> {typeof(TTarget).Name} already registered!");
 
         _mappings[(typeof(TSource), typeof(TTarget))] = mapping;
     }
 
+    internal static void Reset()
+    {
+        _maps.Clear();
+        _mappings.Clear();
+    }
+
     internal static void Compile()
     {
-        foreach (var map in _maps)
-            CompileAndRegister(map);
+        _maps.ForEach(map => CompileAndRegister(map));
     }
 
     private static void RegisterNotExistingMappings<TSource, TTarget>(IMap<TSource, TTarget> mapping)

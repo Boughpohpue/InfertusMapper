@@ -13,8 +13,7 @@ public sealed class MemberConfigExpression<TSource, TTarget, TMember>
         SourceExpression = source;
     }
 
-    public void MapFrom<TSourceMember>(
-        Expression<Func<TSource, TSourceMember>> source)
+    public void MapFrom<TSourceMember>(Expression<Func<TSource, TSourceMember>> source)
     {
         SourceExpression = BuildNestedExpression(source);
     }
@@ -22,25 +21,36 @@ public sealed class MemberConfigExpression<TSource, TTarget, TMember>
     private static LambdaExpression BuildNestedExpression<TSourceMember>(
         Expression<Func<TSource, TSourceMember>> source)
     {
-        var mapper = MappingsRegistry.Get(
-            typeof(TSourceMember),
-            typeof(TMember));
-
+        var mapper = MappingsRegistry.Get(typeof(TSourceMember), typeof(TMember));
         if (mapper == null)
             throw new InvalidOperationException(
                 $"No mapping registered for {typeof(TSourceMember).Name} -> {typeof(TMember).Name}");
 
-        var mapMethod = mapper
-            .GetType()
+        var srcParam = source.Parameters[0];
+        var sourceValue = source.Body;
+
+        var mapMethod = mapper.GetType()
             .GetMethod(nameof(IMap<TSourceMember, TMember>.Map))!;
 
-        var srcParam = source.Parameters[0];
+        var mapCall =
+            Expression.Call(
+                Expression.Constant(mapper),
+                mapMethod,
+                sourceValue
+            );
 
-        var body = Expression.Call(
-            Expression.Constant(mapper),
-            mapMethod,
-            source.Body
-        );
+        var nullCheck =
+            Expression.Equal(
+                sourceValue,
+                Expression.Constant(null, typeof(TSourceMember))
+            );
+
+        var body =
+            Expression.Condition(
+                nullCheck,
+                Expression.Default(typeof(TMember)),
+                mapCall
+            );
 
         return Expression.Lambda(body, srcParam);
     }

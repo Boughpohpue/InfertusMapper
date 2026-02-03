@@ -1,5 +1,6 @@
 ﻿using Infertus.Mapper.Internal.Services;
 using Microsoft.Extensions.DependencyInjection;
+using System.Formats.Tar;
 
 namespace Infertus.Mapper;
 
@@ -12,19 +13,11 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddMapper(this IServiceCollection services, Action<MapperConfigExpression> config)
-    {
-        config.Invoke(new MapperConfigExpression());
-
-        services.AddMapper();
-
-        return services;
-    }
-
     public static IServiceCollection AddMapper<TProfile>(this IServiceCollection services)
         where TProfile : MappingProfile, new()
     {
         services.AddMappingProfile<TProfile>();
+
         services.AddMapper();
 
         return services;
@@ -32,7 +25,17 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddMapper(this IServiceCollection services, params Type[] profileTypes)
     {
-        services.AddMappingProfileTypes(profileTypes);
+        services.AddMappingProfiles(profileTypes);
+
+        services.AddMapper();
+
+        return services;
+    }
+
+    public static IServiceCollection AddMapper(this IServiceCollection services, Action<MapperConfigExpression> config)
+    {
+        config(new MapperConfigExpression());
+
         services.AddMapper();
 
         return services;
@@ -41,23 +44,28 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddMappingProfile<TProfile>(this IServiceCollection services)
         where TProfile : MappingProfile, new()
     {
-        services.AddSingleton<MappingProfile>(new TProfile());
+        //services.AddSingleton<MappingProfile>(new TProfile());
+        new MapperConfigExpression().AddProfile<TProfile>();
 
-        MappingsRegistry.Compile();
+        //MappingsRegistry.Compile();
 
         return services;
     }
 
-    public static IServiceCollection AddMappingProfileTypes(this IServiceCollection services, params Type[] profileTypes)
+    public static IServiceCollection AddMappingProfiles(this IServiceCollection services, params Type[] profileTypes)
     {
+        var config = new MapperConfigExpression();
         foreach (var type in profileTypes)
         {
-            if (!typeof(MappingProfile).IsAssignableFrom(type))
-                throw new ArgumentException($"{type.Name} is not of {nameof(MappingProfile)} type!");
+            config.AddProfile(type);
 
-            var profile = (MappingProfile)Activator.CreateInstance(type)!;
-            services.AddSingleton(typeof(MappingProfile), profile);
-            MappingsRegistry.Compile();
+            //if (!typeof(MappingProfile).IsAssignableFrom(type))
+            //    throw new ArgumentException($"{type.Name} is not of {nameof(MappingProfile)} type!");
+
+            //var profile = (MappingProfile)Activator.CreateInstance(type)!;
+
+            //services.AddSingleton(typeof(MappingProfile), profile);
+            //MappingsRegistry.Compile();
         }
 
         return services;
